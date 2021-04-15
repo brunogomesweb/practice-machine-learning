@@ -1,0 +1,126 @@
+---
+title: "Practical Machine Learning"
+output: html_document
+---
+By Bruno Gomes
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+```{r}
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(dplyr)
+library(corrplot)
+library(rpart)
+library(rpart.plot)
+```
+Download the training and test dataset
+
+```{r}
+dstraining <- read.csv("https://raw.githubusercontent.com/brunogomesweb/practice-machine-learning/0e3d96fd120e5d7520f9ebe16c79d2f25cd6a5e7/pml-training.csv", na.strings=c("#DIV/0!"), row.names = 1)
+
+dsteste <- read.csv("https://raw.githubusercontent.com/brunogomesweb/practice-machine-learning/0e3d96fd120e5d7520f9ebe16c79d2f25cd6a5e7/pml-testing.csv", na.strings=c("#DIV/0!"), row.names = 1)
+```
+
+We have a total of 19622 training lines and 20 test cases to validate the model
+
+Preprocessing
+
+Transforming the class column into a category
+
+Removing NA columns
+```{r}
+dstraining <- dstraining[, colSums(is.na(dstraining)) == 0] 
+dsteste <- dsteste[, colSums(is.na(dsteste)) == 0] 
+```
+
+Removing NA columns
+```{r}
+dstraining <- dstraining[, colSums(is.na(dstraining)) == 0] 
+dsteste <- dsteste[, colSums(is.na(dsteste)) == 0] 
+```
+
+Removing some columns that matter
+```{r}
+classe <- dstraining$classe
+dstrainingRemove <- grepl("^X|timestamp|window", names(dstraining))
+dstraining <- dstraining[, !dstrainingRemove]
+
+dstrainingCleaned <- dstraining[, sapply(dstraining, is.numeric)]
+dstrainingCleaned$classe <- classe
+
+dstesteRemove <- grepl("^X|timestamp|window", names(dsteste))
+dsteste <- dsteste[, !dstesteRemove]
+
+dstesteCleaned <- dsteste[, sapply(dsteste, is.numeric)]
+```
+
+Separation of training and test data
+```{r}
+set.seed(0123)
+trainset <- createDataPartition(dstrainingCleaned$classe, p = 0.75, list = FALSE)
+training <- dstrainingCleaned[trainset, ]
+Validation <- dstrainingCleaned[-trainset, ]
+```
+
+
+Using random forest model to automatically select the most important variables using 5-fold cross-validation.
+```{r}
+controlRandomf <- trainControl(method="cv", 5)
+mdRandomf <- train(classe ~ ., data=training, method="rf", trControl=controlRandomf, ntree=250)
+mdRandomf
+```
+
+Estimating model performance with the confusion matrix
+```{r}
+predictRandomf <- predict(mdRandomf, Validation)
+confusionMatrix(table(Validation$classe, predictRandomf))
+```
+
+Top 20 plot
+```{r}
+varImportant <- varImp(mdRandomf)
+plot(varImportant, main = "Top 20 Variables", top = 20)
+```
+
+Tree Visualization
+```{r}
+treeModel <- rpart(classe ~ ., data=training, method="class")
+prp(treeModel) 
+```
+
+```{r}
+Validation$classe <- factor(Validation$classe)  
+ac <- postResample(predictRandomf,Validation$classe)
+ac
+```
+
+working with the test suite
+```{r}
+subset(dstesteCleaned, select = -c(problem_id))
+dstesteCleaned = subset(dstesteCleaned, select = -c(problem_id))
+result <- predict(predictRandomf, dstesteCleaned)
+result
+
+answers <- as.vector(result)
+
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
+
+
+
